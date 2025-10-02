@@ -160,7 +160,17 @@ async function readCSV(filename) {
   try {
     const { datadir } = DATA.settings;
     const data = await githubAPI(`${datadir}/${filename}`);
-    const csv = atob(data.content.replace(/\n/g, ''));
+    
+    // Правильное декодирование UTF-8 для кириллицы
+    const base64 = data.content.replace(/\n/g, '');
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const csv = new TextDecoder('utf-8').decode(bytes);
+    
+    console.log(`Loaded ${filename}:`, csv.substring(0, 100));
     return parseCSV(csv);
   } catch (error) {
     console.error(`Error reading ${filename}:`, error);
@@ -181,8 +191,15 @@ async function writeCSV(filename, data) {
     sha = null;
   }
   
+  // Правильное кодирование UTF-8 для кириллицы
   const csv = serializeCSV(data);
-  const content = btoa(unescape(encodeURIComponent(csv)));
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(csv);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const content = btoa(binary);
   
   await githubAPI(path, 'PUT', {
     message: `Update ${filename}`,
