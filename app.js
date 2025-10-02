@@ -49,6 +49,7 @@ function saveSettings() {
 // Показ статуса
 function showStatus(elementId, type, message) {
   const el = document.getElementById(elementId);
+  if (!el) return;
   el.textContent = message;
   el.className = `status-message ${type} show`;
   setTimeout(() => el.classList.remove('show'), 5000);
@@ -56,7 +57,8 @@ function showStatus(elementId, type, message) {
 
 // Показать/скрыть загрузчик
 function showLoader(show = true) {
-  document.getElementById('loader').style.display = show ? 'flex' : 'none';
+  const loader = document.getElementById('loader');
+  if (loader) loader.style.display = show ? 'flex' : 'none';
 }
 
 // ==================== Работа с GitHub API ====================
@@ -81,8 +83,8 @@ async function githubRequest(path, method = 'GET', body = null) {
   const response = await fetch(url, options);
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'GitHub API error');
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || `HTTP ${response.status}`);
   }
   
   return response.json();
@@ -93,7 +95,8 @@ async function readCSV(filename) {
   try {
     const { datadir } = APP.settings;
     const data = await githubRequest(`${datadir}/${filename}`);
-    const content = atob(data.content);
+    const content = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+    console.log(`Loaded ${filename}:`, content.substring(0, 200));
     return parseCSV(content);
   } catch (error) {
     console.error(`Error reading ${filename}:`, error);
@@ -116,7 +119,8 @@ async function writeCSV(filename, data) {
       sha = null; // Файл не существует
     }
     
-    const content = btoa(unescape(encodeURIComponent(serializeCSV(data))));
+    const csvContent = serializeCSV(data);
+    const content = btoa(unescape(encodeURIComponent(csvContent)));
     
     await githubRequest(path, 'PUT', {
       message: `Update ${filename}`,
@@ -132,25 +136,43 @@ async function writeCSV(filename, data) {
   }
 }
 
-// Парсинг CSV
+// Улучшенный парсинг CSV
 function parseCSV(text) {
-  const lines = text.trim().split('\n');
+  const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
   
   const headers = lines[0].split(',').map(h => h.trim());
-  return lines.slice(1).map(line => {
+  const result = [];
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    
     const values = line.split(',');
     const obj = {};
-    headers.forEach((header, i) => {
-      let value = values[i] ? values[i].trim() : '';
-      // Попытка преобразовать в число
-      if (value && !isNaN(value)) {
-        value = parseFloat(value);
+    
+    headers.forEach((header, idx) => {
+      let value = values[idx] ? values[idx].trim() : '';
+      
+      // Преобразование типов
+      if (value === '' || value === 'nan' || value === 'NaN') {
+        value = null;
+      } else if (!isNaN(value) && value !== '') {
+        const num = parseFloat(value);
+        value = Number.isInteger(num) ? parseInt(value) : num;
+      } else if (value.toLowerCase() === 'true') {
+        value = true;
+      } else if (value.toLowerCase() === 'false') {
+        value = false;
       }
+      
       obj[header] = value;
     });
-    return obj;
-  });
+    
+    result.push(obj);
+  }
+  
+  return result;
 }
 
 // Сериализация CSV
@@ -161,7 +183,8 @@ function serializeCSV(data) {
   data.forEach(item => {
     const values = headers.map(h => {
       const val = item[h];
-      return val === undefined || val === null ? '' : String(val);
+      if (val === undefined || val === null) return '';
+      return String(val);
     });
     rows.push(values.join(','));
   });
@@ -172,6 +195,7 @@ function serializeCSV(data) {
 async function reloadAllData() {
   showLoader(true);
   try {
+    console.log('Loading data...');
     APP.data.apartments = await readCSV('apartments.csv');
     APP.data.services = await readCSV('services.csv');
     APP.data.tariffs = await readCSV('tariffs.csv');
@@ -179,9 +203,18 @@ async function reloadAllData() {
     APP.data.readings = await readCSV('readings.csv');
     APP.data.adjustments = await readCSV('adjustments.csv');
     
+    console.log('Data loaded:', {
+      apartments: APP.data.apartments.length,
+      services: APP.data.services.length,
+      tariffs: APP.data.tariffs.length,
+      meters: APP.data.meters.length,
+      readings: APP.data.readings.length
+    });
+    
     populateDropdowns();
-    showStatus('settingsStatus', 'success', '✓ Данные загружены');
+    showStatus('settingsStatus', 'success', `✓ Данные загружены (${APP.data.apartments.length} квартир)`);
   } catch (error) {
+    console.error('Load error:', error);
     showStatus('settingsStatus', 'error', '✗ Ошибка загрузки: ' + error.message);
   } finally {
     showLoader(false);
@@ -192,10 +225,13 @@ async function reloadAllData() {
 function populateDropdowns() {
   const { apartments, services } = APP.data;
   
+  console.log('Populating dropdowns:', apartments, services);
+  
   // Квартиры
   const aptSelects = ['calcApartment', 'histApartment'];
   aptSelects.forEach(id => {
     const select = document.getElementById(id);
+    if (!select) return;
     select.innerHTML = '<option value="">Выберите квартиру...</option>';
     apartments.forEach(apt => {
       select.innerHTML += `<option value="${apt.id}">${apt.name}</option>`;
@@ -204,15 +240,19 @@ function populateDropdowns() {
   
   // Услуги для тарифов
   const srvSelect = document.getElementById('tarService');
-  srvSelect.innerHTML = '<option value="">Выберите услугу...</option>';
-  services.forEach(srv => {
-    srvSelect.innerHTML += `<option value="${srv.id}">${srv.name}</option>`;
-  });
+  if (srvSelect) {
+    srvSelect.innerHTML = '<option value="">Выберите услугу...</option>';
+    services.forEach(srv => {
+      srvSelect.innerHTML += `<option value="${srv.id}">${srv.name}</option>`;
+    });
+  }
   
   // Установить текущую дату
   const now = new Date();
-  document.getElementById('calcYear').value = now.getFullYear();
-  document.getElementById('calcMonth').value = now.getMonth() + 1;
+  const yearInput = document.getElementById('calcYear');
+  const monthInput = document.getElementById('calcMonth');
+  if (yearInput) yearInput.value = now.getFullYear();
+  if (monthInput) monthInput.value = now.getMonth() + 1;
 }
 
 // ==================== Расчёт начислений ====================
@@ -261,11 +301,11 @@ function showCalculations() {
     
     if (viewMode === 'readings') {
       html += `
-        <td>${prevReading || 0}</td>
-        <td><input type="number" step="0.01" value="${currReading || ''}" 
-            data-meter="${meter.id}" class="reading-input" /></td>`;
+        <td>${prevReading !== null ? prevReading : 0}</td>
+        <td><input type="number" step="0.01" value="${currReading !== null ? currReading : ''}" 
+            data-meter="${meter.id}" class="reading-input" style="width: 120px; padding: 0.5rem;" /></td>`;
     } else {
-      const volume = currReading && prevReading ? (currReading - prevReading) : 0;
+      const volume = currReading !== null && prevReading !== null ? (currReading - prevReading) : 0;
       html += `<td>${volume.toFixed(2)}</td>`;
     }
     
@@ -480,6 +520,8 @@ function showHistory() {
   
   if (periods.length === 0) {
     histTable.style.display = 'none';
+    document.getElementById('histChartCard').style.display = 'none';
+    alert('Нет данных для отображения истории');
     return;
   }
   
@@ -540,7 +582,7 @@ function showHistoryChart(periods, totals) {
     },
     options: {
       responsive: true,
-      maintainAspectRatio: false,
+      maintainAspectRatio: true,
       plugins: {
         legend: {
           labels: { color: '#f1f5f9' }
@@ -639,55 +681,76 @@ async function addTariff() {
 
 // ==================== Инициализация ====================
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('App initialized');
   loadSettings();
   
   // Вкладки
   document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
       const tab = btn.dataset.tab;
+      
+      console.log('Tab clicked:', tab);
       
       // Переключить активные вкладки
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       
       btn.classList.add('active');
-      document.getElementById(tab).classList.add('active');
+      const tabContent = document.getElementById(tab);
+      if (tabContent) {
+        tabContent.classList.add('active');
+      }
       
       // Загрузить данные для вкладки
-      if (tab === 'tariffs') {
+      if (tab === 'tariffs' && APP.data.tariffs.length > 0) {
         loadTariffs();
       }
     });
   });
   
   // Настройки
-  document.getElementById('saveSettings').addEventListener('click', saveSettings);
-  document.getElementById('testConnection').addEventListener('click', async () => {
-    showLoader(true);
-    try {
-      await githubRequest('');
-      showStatus('settingsStatus', 'success', '✓ Соединение успешно');
-    } catch (error) {
-      showStatus('settingsStatus', 'error', '✗ Ошибка: ' + error.message);
-    } finally {
-      showLoader(false);
-    }
-  });
+  const saveBtn = document.getElementById('saveSettings');
+  if (saveBtn) saveBtn.addEventListener('click', saveSettings);
+  
+  const testBtn = document.getElementById('testConnection');
+  if (testBtn) {
+    testBtn.addEventListener('click', async () => {
+      showLoader(true);
+      try {
+        await githubRequest('');
+        showStatus('settingsStatus', 'success', '✓ Соединение успешно');
+      } catch (error) {
+        showStatus('settingsStatus', 'error', '✗ Ошибка: ' + error.message);
+      } finally {
+        showLoader(false);
+      }
+    });
+  }
   
   // Расчёт
-  document.getElementById('calcReload').addEventListener('click', showCalculations);
+  const calcBtn = document.getElementById('calcReload');
+  if (calcBtn) calcBtn.addEventListener('click', showCalculations);
   
   // История
-  document.getElementById('histReload').addEventListener('click', showHistory);
+  const histBtn = document.getElementById('histReload');
+  if (histBtn) histBtn.addEventListener('click', showHistory);
   
   // Тарифы
-  document.getElementById('addTariff').addEventListener('click', addTariff);
-  document.getElementById('tarHasEnd').addEventListener('change', (e) => {
-    document.getElementById('tarEnd').disabled = !e.target.checked;
-  });
+  const addTarBtn = document.getElementById('addTariff');
+  if (addTarBtn) addTarBtn.addEventListener('click', addTariff);
+  
+  const tarHasEnd = document.getElementById('tarHasEnd');
+  if (tarHasEnd) {
+    tarHasEnd.addEventListener('change', (e) => {
+      const tarEnd = document.getElementById('tarEnd');
+      if (tarEnd) tarEnd.disabled = !e.target.checked;
+    });
+  }
   
   // Автозагрузка данных если настройки есть
   if (APP.settings.token) {
+    console.log('Auto-loading data...');
     reloadAllData();
   }
 });
