@@ -207,6 +207,17 @@ small {
   box-shadow: var(--shadow-lg);
 }
 
+.btn-secondary {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-secondary);
+  border-color: var(--primary);
+}
+
 /* Переключатель */
 .switch-label {
   display: flex;
@@ -458,6 +469,18 @@ code {
   font-size: 1.1rem;
 }
 
+.button-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.button-row .btn {
+  flex: 1;
+  min-width: 200px;
+}
+
 /* Адаптивность для форм */
 /* Адаптивность для форм */
 @media (max-width: 768px) {
@@ -504,5 +527,13 @@ code {
   
   input, select {
     font-size: 16px; /* Prevent zoom on iOS */
+  }
+  
+  .button-row {
+    flex-direction: column;
+  }
+  
+  .button-row .btn {
+    width: 100%;
   }
 }
