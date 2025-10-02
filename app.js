@@ -11,8 +11,6 @@ const DATA = {
   historyMode: 'readings'
 };
 
-let chart = null;
-
 // ========== Инициализация ==========
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
@@ -702,51 +700,6 @@ function showHistoryFull() {
   html += '</tbody></table>';
   
   document.getElementById('consumptionTable').innerHTML = html;
-  
-  // График
-  renderChart(periods, chartData);
-}
-
-function renderChart(periods, data) {
-  const canvas = document.getElementById('chart');
-  if (chart) chart.destroy();
-  
-  const monthNames = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
-  
-  chart = new Chart(canvas, {
-    type: 'line',
-    data: {
-      labels: monthNames,
-      datasets: [{
-        label: 'Расходы, ₽',
-        data: data,
-        borderColor: '#2563eb',
-        backgroundColor: 'rgba(37, 99, 235, 0.1)',
-        tension: 0.3,
-        fill: true,
-        pointRadius: 4,
-        pointHoverRadius: 6
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: { color: '#475569' },
-          grid: { color: '#e2e8f0' }
-        },
-        x: {
-          ticks: { color: '#475569' },
-          grid: { color: '#e2e8f0' }
-        }
-      }
-    }
-  });
 }
 
 function exportToExcel() {
