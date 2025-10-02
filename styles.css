@@ -1,0 +1,24 @@
+/* ---- UI color fixes ---- */
+nav { color:#0f172a; }
+.tab-btn{
+  background:#ffffff;
+  color:#0f172a;            /* black text on white buttons */
+  border:1px solid #cbd5e1;
+}
+.tab-btn:focus { outline:2px solid #94a3b8; }
+
+/* inputs/selects with clear text */
+input, select, option, label { color:#0f172a; background:#ffffff; }
+select { border:1px solid #cbd5e1; }
+option { background:#ffffff; color:#0f172a; }
+
+/* header settings inputs remain readable on dark header */
+header .settings input{
+  background:#0b132b;
+  color:#e2e8f0;
+  border:1px solid #475569;
+}
+header .settings input::placeholder{ color:#94a3b8; opacity:1; }
+
+/* Hide empty placeholders */
+.table-wrap:empty{ display:none; }
