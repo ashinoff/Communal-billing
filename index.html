@@ -123,27 +123,30 @@
         <div class="form-grid">
           <div>
             <label>Owner (ваш логин)</label>
-            <input type="text" id="owner" placeholder="ashinoff">
+            <input type="text" id="owner" placeholder="например: Ashinoff">
           </div>
           <div>
             <label>Repository</label>
-            <input type="text" id="repo" placeholder="Communal-billing">
+            <input type="text" id="repo" placeholder="например: Communal-billing">
           </div>
           <div>
             <label>Branch</label>
-            <input type="text" id="branch" value="main">
+            <input type="text" id="branch" value="main" placeholder="main">
           </div>
           <div>
             <label>Data folder</label>
-            <input type="text" id="datadir" value="data">
+            <input type="text" id="datadir" value="data" placeholder="data">
           </div>
           <div class="full-width">
             <label>Personal Access Token</label>
-            <input type="password" id="token" placeholder="ghp_...">
+            <input type="password" id="token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
             <small>Токен сохраняется только в вашем браузере</small>
           </div>
         </div>
-        <button onclick="saveSettings()" class="btn btn-primary">Сохранить и загрузить данные</button>
+        <div class="button-row">
+          <button onclick="saveSettings()" class="btn btn-primary">Сохранить и загрузить данные</button>
+          <button onclick="clearSettings()" class="btn btn-secondary">Очистить настройки</button>
+        </div>
         <div id="status"></div>
       </div>
 
