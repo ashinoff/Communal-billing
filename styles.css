@@ -282,6 +282,12 @@ td input:disabled {
   border-color: transparent;
 }
 
+.correction-input, .charge-correction-input, .comment-correction-input {
+  width: 100%;
+  max-width: 100px;
+  font-size: 12px;
+}
+
 /* Чекбоксы */
 input[type="checkbox"] {
   width: 18px;
@@ -451,4 +457,26 @@ input[type="checkbox"] {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+/* Стили для печати квитанции */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  #receiptContent, #receiptContent * {
+    visibility: visible;
+  }
+  
+  #receiptContent {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  
+  header, nav, footer, .btn, #exportReceiptBtn {
+    display: none !important;
+  }
 }
