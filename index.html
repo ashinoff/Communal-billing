@@ -16,6 +16,7 @@
   <nav>
     <div class="container">
       <button class="tab-btn active" data-tab="calc">Начисления и расчёт</button>
+      <button class="tab-btn" data-tab="daily">Калькуляция по дням</button>
       <button class="tab-btn" data-tab="history">История потребления</button>
       <button class="tab-btn" data-tab="correction">Корректировка данных</button>
       <button class="tab-btn" data-tab="receipt">Квитанция на оплату</button>
@@ -69,6 +70,53 @@
           <h3>Итоги начислений за последние 3 месяца</h3>
           <div class="table-container">
             <div id="totalsTable"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Калькуляция по дням -->
+    <section id="daily" class="tab-content">
+      <div class="card">
+        <h2>Расчёт за неполный период (для выезжающих)</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Квартира</label>
+            <select id="dailyApartment" class="select-large">
+              <option value="">Выберите квартиру...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Период С (дата)</label>
+            <input type="date" id="dailyDateFrom" class="select-large">
+          </div>
+          <div class="form-group">
+            <label>Период ПО (дата)</label>
+            <input type="date" id="dailyDateTo" class="select-large">
+          </div>
+          <button onclick="loadDailyCalc()" class="btn btn-primary" style="align-self: flex-end;">Загрузить</button>
+        </div>
+      </div>
+
+      <div id="dailyPanel" style="display:none;">
+        <div class="card">
+          <h3>Расчёт за период: <span id="dailyPeriodDisplay"></span> (<span id="dailyDaysCount"></span> дней)</h3>
+          <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
+            Показания на начало подтянуты автоматически. Фиксированные услуги рассчитываются пропорционально дням.
+          </p>
+          
+          <div class="table-container">
+            <div id="dailyTable"></div>
+          </div>
+
+          <div class="btn-group" style="margin-top: 12px;">
+            <button onclick="calculateDaily()" class="btn btn-primary">Рассчитать</button>
+            <button onclick="exportDailyToWord()" class="btn btn-success" id="exportDailyBtn" disabled>
+              Выгрузить в Word
+            </button>
+            <button onclick="fixStorno()" class="btn btn-secondary" id="fixStornoBtn" disabled>
+              Зафиксировать сторно для текущего месяца
+            </button>
           </div>
         </div>
       </div>
