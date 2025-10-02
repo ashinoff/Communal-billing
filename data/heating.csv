@@ -26,3 +26,15 @@ id,apartment_id,period,enabled
 25,2,2025-10,false
 26,2,2025-11,false
 27,2,2025-12,false
+28,3,2025-01,false
+29,3,2025-02,false
+30,3,2025-03,false
+31,3,2025-04,true
+32,3,2025-05,true
+33,3,2025-06,false
+34,3,2025-07,false
+35,3,2025-08,false
+36,3,2025-09,false
+37,3,2025-10,false
+38,3,2025-11,false
+39,3,2025-12,false
