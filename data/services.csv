@@ -1,1 +1,12 @@
 id,code,name,unit
+1,electricity,Электроэнергия,кВт·ч
+2,lighting_mop,Освещение МОП,кВт·ч
+3,coldwater,Холодная вода,м³
+4,hotwater,Горячая вода,м³
+5,sewer,Водоотведение,м³
+6,heating_studio,Отопление (студия),руб/мес
+7,heating_duplex,Отопление (2-ур.),руб/мес
+8,maintenance,Содержание,руб/мес
+9,garbage,Мусор,руб/мес
+10,internet,Интернет,руб/мес
+id,code,name,unit
