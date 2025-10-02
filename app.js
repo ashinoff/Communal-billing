@@ -79,14 +79,47 @@ function loadSettings() {
 function saveSettings() {
   DATA.settings.owner = document.getElementById('owner').value.trim();
   DATA.settings.repo = document.getElementById('repo').value.trim();
-  DATA.settings.branch = document.getElementById('branch').value.trim();
-  DATA.settings.datadir = document.getElementById('datadir').value.trim();
+  DATA.settings.branch = document.getElementById('branch').value.trim() || 'main';
+  DATA.settings.datadir = document.getElementById('datadir').value.trim() || 'data';
   DATA.settings.token = document.getElementById('token').value.trim();
   
+  // Валидация
+  if (!DATA.settings.owner) {
+    showStatus('✗ Заполните поле Owner', 'error');
+    return;
+  }
+  if (!DATA.settings.repo) {
+    showStatus('✗ Заполните поле Repository', 'error');
+    return;
+  }
+  if (!DATA.settings.token) {
+    showStatus('✗ Заполните Personal Access Token', 'error');
+    return;
+  }
+  
   localStorage.setItem('communalSettings', JSON.stringify(DATA.settings));
-  showStatus('✓ Настройки сохранены', 'success');
+  showStatus('✓ Настройки сохранены, загружаем данные...', 'success');
   
   loadAllData();
+}
+
+function clearSettings() {
+  if (confirm('Очистить все сохранённые настройки?')) {
+    localStorage.removeItem('communalSettings');
+    DATA.settings = {
+      owner: '',
+      repo: '',
+      branch: 'main',
+      datadir: 'data',
+      token: ''
+    };
+    document.getElementById('owner').value = '';
+    document.getElementById('repo').value = '';
+    document.getElementById('branch').value = 'main';
+    document.getElementById('datadir').value = 'data';
+    document.getElementById('token').value = '';
+    showStatus('✓ Настройки очищены', 'success');
+  }
 }
 
 function showStatus(msg, type) {
@@ -835,3 +868,9 @@ function getPrevPeriod(period) {
   const prevYear = month === 1 ? year - 1 : year;
   return `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
 }
+
+// ========== Глобальные функции ==========
+window.saveData = saveData;
+window.saveSettings = saveSettings;
+window.clearSettings = clearSettings;
+window.updateTariff = updateTariff;
