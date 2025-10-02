@@ -7,14 +7,18 @@ const DATA = {
   charges: [],
   heating: [],
   settings: { owner: '', repo: '', branch: 'main', datadir: 'data', token: '' },
-  calculated: false,
-  historyMode: 'readings'
+  calculated: false
 };
 
 // ========== Инициализация ==========
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
   setupTabs();
+  
+  // Установить текущий месяц и год
+  const now = new Date();
+  document.getElementById('receiptYear').value = now.getFullYear();
+  document.getElementById('receiptMonth').value = now.getMonth() + 1;
   
   if (DATA.settings.token) {
     loadAllData();
@@ -225,7 +229,7 @@ async function loadAllData() {
 }
 
 function populateDropdowns() {
-  ['apartment', 'historyApartment'].forEach(id => {
+  ['apartment', 'historyApartment', 'correctionApartment', 'receiptApartment'].forEach(id => {
     const sel = document.getElementById(id);
     sel.innerHTML = '<option value="">Выберите квартиру...</option>';
     DATA.apartments.forEach(apt => {
@@ -573,15 +577,8 @@ function renderHistory3Months(aptId, aptType) {
     
     periods.forEach(period => {
       if (srv.calc_type === 'meter') {
-        const prev = getReading(aptId, srv.id, getPrevPeriod(period));
         const curr = getReading(aptId, srv.id, period);
-        
-        if (DATA.historyMode === 'readings') {
-          html += `<td>${curr !== null ? curr : '—'}</td>`;
-        } else {
-          const vol = curr && prev ? (curr - prev).toFixed(2) : '—';
-          html += `<td>${vol}</td>`;
-        }
+        html += `<td>${curr !== null ? curr : '—'}</td>`;
       } else if (srv.calc_type === 'checkbox') {
         const enabled = getHeating(aptId, period);
         html += `<td style="text-align:center;">${enabled ? '✓' : '—'}</td>`;
@@ -598,18 +595,14 @@ function renderHistory3Months(aptId, aptType) {
 }
 
 function toggleHistoryMode(mode) {
-  DATA.historyMode = mode;
-  const aptId = document.getElementById('apartment').value;
-  if (aptId) {
-    const apt = DATA.apartments.find(a => a.id == aptId);
-    renderHistory3Months(parseInt(aptId), apt.type);
-  }
+  // Удалена - больше не используется
 }
 
 // ========== История на 12 месяцев ==========
 function showHistoryFull() {
   const aptId = parseInt(document.getElementById('historyApartment').value);
   const year = parseInt(document.getElementById('historyYear').value);
+  const viewMode = document.getElementById('historyViewMode').value;
   
   if (!aptId) {
     alert('Выберите квартиру');
@@ -627,7 +620,6 @@ function showHistoryFull() {
     periods.push(`${year}-${String(m).padStart(2, '0')}`);
   }
   
-  // Таблица: услуги в строках, месяцы в столбцах
   let html = '<table><thead><tr><th style="text-align:left;">Услуга</th>';
   monthNames.forEach(month => {
     html += `<th>${month}</th>`;
@@ -642,6 +634,7 @@ function showHistoryFull() {
     let rowTotal = 0;
     
     periods.forEach((period, idx) => {
+      let displayValue = '—';
       let amount = 0;
       
       if (srv.calc_type === 'meter') {
@@ -649,11 +642,21 @@ function showHistoryFull() {
         const curr = getReading(aptId, srv.id, period);
         const vol = curr && prev ? curr - prev : 0;
         amount = vol * tariff;
+        
+        if (viewMode === 'readings') {
+          displayValue = curr !== null ? curr.toString() : '—';
+        } else if (viewMode === 'volumes') {
+          displayValue = vol > 0 ? vol.toFixed(2) : '—';
+        } else {
+          displayValue = amount > 0 ? amount.toFixed(2) : '—';
+        }
+        
       } else if (srv.calc_type === 'calculated') {
         if (srv.id === 2) {
           const ePrev = getReading(aptId, 1, getPrevPeriod(period));
           const eCurr = getReading(aptId, 1, period);
-          amount = eCurr && ePrev ? (eCurr - ePrev) * 0.1 * tariff : 0;
+          const vol = eCurr && ePrev ? (eCurr - ePrev) * 0.1 : 0;
+          amount = vol * tariff;
         } else if (srv.id === 5) {
           const hvPrev = getReading(aptId, 3, getPrevPeriod(period));
           const hvCurr = getReading(aptId, 3, period);
@@ -663,40 +666,67 @@ function showHistoryFull() {
                       (gvCurr && gvPrev ? gvCurr - gvPrev : 0);
           amount = vol * tariff;
         }
+        
+        if (viewMode === 'volumes') {
+          const vol = amount / tariff;
+          displayValue = vol > 0 ? vol.toFixed(2) : '—';
+        } else if (viewMode !== 'readings') {
+          displayValue = amount > 0 ? amount.toFixed(2) : '—';
+        }
+        
       } else if (srv.calc_type === 'checkbox') {
-        amount = getHeating(aptId, period) ? tariff : 0;
+        const enabled = getHeating(aptId, period);
+        amount = enabled ? tariff : 0;
+        
+        if (viewMode === 'readings') {
+          displayValue = enabled ? '✓' : '—';
+        } else if (viewMode !== 'volumes') {
+          displayValue = amount > 0 ? amount.toFixed(2) : '—';
+        }
+        
       } else if (srv.calc_type === 'fixed') {
         amount = tariff;
+        if (viewMode !== 'readings' && viewMode !== 'volumes') {
+          displayValue = amount.toFixed(2);
+        }
       }
       
       chartData[idx] += amount;
       rowTotal += amount;
-      html += `<td>${amount > 0 ? amount.toFixed(2) : '—'}</td>`;
+      html += `<td>${displayValue}</td>`;
     });
     
-    html += `<td><strong>${rowTotal.toFixed(2)} ₽</strong></td></tr>`;
+    if (viewMode === 'amounts') {
+      html += `<td><strong>${rowTotal.toFixed(2)} ₽</strong></td>`;
+    } else {
+      html += `<td>—</td>`;
+    }
+    html += '</tr>';
   });
   
   // Доп начисления
-  html += `<tr class="charge-row"><td><strong>Доп. начисления</strong></td>`;
-  let chargeTotal = 0;
-  periods.forEach((period, idx) => {
-    const charge = getCharge(aptId, period);
-    const amt = charge?.amount || 0;
-    chartData[idx] += amt;
-    chargeTotal += amt;
-    html += `<td>${amt > 0 ? amt.toFixed(2) : '—'}</td>`;
-  });
-  html += `<td><strong>${chargeTotal.toFixed(2)} ₽</strong></td></tr>`;
+  if (viewMode === 'amounts') {
+    html += `<tr class="charge-row"><td><strong>Доп. начисления</strong></td>`;
+    let chargeTotal = 0;
+    periods.forEach((period, idx) => {
+      const charge = getCharge(aptId, period);
+      const amt = charge?.amount || 0;
+      chartData[idx] += amt;
+      chargeTotal += amt;
+      html += `<td>${amt > 0 ? amt.toFixed(2) : '—'}</td>`;
+    });
+    html += `<td><strong>${chargeTotal.toFixed(2)} ₽</strong></td></tr>`;
+    
+    // Итого
+    html += `<tr class="total-row"><td><strong>ИТОГО:</strong></td>`;
+    let grandTotal = 0;
+    chartData.forEach(t => {
+      grandTotal += t;
+      html += `<td><strong>${t.toFixed(2)} ₽</strong></td>`;
+    });
+    html += `<td><strong>${grandTotal.toFixed(2)} ₽</strong></td></tr>`;
+  }
   
-  // Итого
-  html += `<tr class="total-row"><td><strong>ИТОГО:</strong></td>`;
-  let grandTotal = 0;
-  chartData.forEach(t => {
-    grandTotal += t;
-    html += `<td><strong>${t.toFixed(2)} ₽</strong></td>`;
-  });
-  html += `<td><strong>${grandTotal.toFixed(2)} ₽</strong></td></tr>`;
   html += '</tbody></table>';
   
   document.getElementById('consumptionTable').innerHTML = html;
@@ -704,6 +734,304 @@ function showHistoryFull() {
 
 function exportToExcel() {
   alert('Экспорт в Excel будет реализован в следующей версии');
+}
+
+// ========== Корректировка данных ==========
+function showCorrectionForm() {
+  const aptId = parseInt(document.getElementById('correctionApartment').value);
+  const year = parseInt(document.getElementById('correctionYear').value);
+  
+  if (!aptId) {
+    alert('Выберите квартиру');
+    return;
+  }
+  
+  document.getElementById('correctionPanel').style.display = 'block';
+  document.getElementById('correctionPeriodTitle').textContent = year;
+  
+  const apt = DATA.apartments.find(a => a.id === aptId);
+  const periods = [];
+  const monthNames = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+  
+  for (let m = 1; m <= 12; m++) {
+    periods.push(`${year}-${String(m).padStart(2, '0')}`);
+  }
+  
+  // Только услуги со счётчиками
+  const meterServices = DATA.services.filter(s => s.calc_type === 'meter');
+  
+  let html = '<table><thead><tr><th style="text-align:left;">Услуга</th>';
+  monthNames.forEach(month => html += `<th>${month}</th>`);
+  html += '</tr></thead><tbody>';
+  
+  meterServices.forEach(srv => {
+    html += `<tr><td><strong>${srv.name}</strong></td>`;
+    
+    periods.forEach(period => {
+      const curr = getReading(aptId, srv.id, period);
+      html += `<td>
+        <input type="number" step="0.01" value="${curr !== null ? curr : ''}" 
+          data-apt="${aptId}" data-service="${srv.id}" data-period="${period}"
+          class="correction-input" placeholder="—" style="width:80px;">
+      </td>`;
+    });
+    
+    html += '</tr>';
+  });
+  
+  // Доп начисления
+  html += `<tr class="charge-row"><td><strong>Доп. начисления (₽)</strong></td>`;
+  periods.forEach(period => {
+    const charge = getCharge(aptId, period);
+    html += `<td>
+      <input type="number" step="0.01" value="${charge?.amount || ''}"
+        data-apt="${aptId}" data-period="${period}"
+        class="charge-correction-input" placeholder="—" style="width:80px;">
+    </td>`;
+  });
+  html += '</tr>';
+  
+  // Комментарии к доп начислениям
+  html += `<tr class="charge-row"><td><strong>Комментарий</strong></td>`;
+  periods.forEach(period => {
+    const charge = getCharge(aptId, period);
+    html += `<td>
+      <input type="text" value="${charge?.comment || ''}"
+        data-apt="${aptId}" data-period="${period}"
+        class="comment-correction-input" placeholder="—" style="width:80px; font-size:11px;">
+    </td>`;
+  });
+  html += '</tr>';
+  
+  // Итого (рассчитывается автоматически)
+  html += `<tr class="total-row"><td><strong>Итого (авто)</strong></td>`;
+  periods.forEach(period => {
+    let total = 0;
+    
+    meterServices.forEach(srv => {
+      const tariff = getTariff(srv.id, apt.type);
+      const prev = getReading(aptId, srv.id, getPrevPeriod(period));
+      const curr = getReading(aptId, srv.id, period);
+      const vol = curr && prev ? curr - prev : 0;
+      total += vol * tariff;
+    });
+    
+    // Добавить фиксированные услуги
+    DATA.services.filter(s => s.calc_type === 'fixed').forEach(srv => {
+      total += getTariff(srv.id, apt.type);
+    });
+    
+    // Доп начисления
+    const charge = getCharge(aptId, period);
+    if (charge) total += charge.amount;
+    
+    html += `<td><strong>${total.toFixed(2)}</strong></td>`;
+  });
+  html += '</tr>';
+  
+  html += '</tbody></table>';
+  document.getElementById('correctionTable').innerHTML = html;
+}
+
+async function saveCorrectionData() {
+  showLoader(true);
+  
+  try {
+    // Сохранить показания
+    const readingInputs = document.querySelectorAll('.correction-input');
+    readingInputs.forEach(input => {
+      const aptId = parseInt(input.dataset.apt);
+      const srvId = parseInt(input.dataset.service);
+      const period = input.dataset.period;
+      const value = parseFloat(input.value);
+      
+      if (!isNaN(value)) {
+        let reading = DATA.readings.find(r => 
+          r.apartment_id === aptId && r.service_id === srvId && r.period === period
+        );
+        
+        if (reading) {
+          reading.value = value;
+        } else {
+          DATA.readings.push({
+            id: Math.max(0, ...DATA.readings.map(r => r.id)) + 1,
+            apartment_id: aptId,
+            service_id: srvId,
+            period,
+            value
+          });
+        }
+      }
+    });
+    
+    // Сохранить доп начисления
+    const chargeInputs = document.querySelectorAll('.charge-correction-input');
+    const commentInputs = document.querySelectorAll('.comment-correction-input');
+    
+    chargeInputs.forEach((input, idx) => {
+      const aptId = parseInt(input.dataset.apt);
+      const period = input.dataset.period;
+      const amount = parseFloat(input.value);
+      const comment = commentInputs[idx].value.trim();
+      
+      if (!isNaN(amount) && amount > 0 && comment) {
+        let charge = DATA.charges.find(c => 
+          c.apartment_id === aptId && c.period === period
+        );
+        
+        if (charge) {
+          charge.amount = amount;
+          charge.comment = comment;
+        } else {
+          DATA.charges.push({
+            id: Math.max(0, ...DATA.charges.map(c => c.id)) + 1,
+            apartment_id: aptId,
+            period,
+            amount,
+            comment
+          });
+        }
+      }
+    });
+    
+    await writeCSV('readings.csv', DATA.readings);
+    await writeCSV('charges.csv', DATA.charges);
+    
+    showStatus('Данные сохранены', 'success');
+    
+  } catch (error) {
+    showStatus(`Ошибка: ${error.message}`, 'error');
+  } finally {
+    showLoader(false);
+  }
+}
+
+// ========== Квитанция на оплату ==========
+function generateReceipt() {
+  const aptId = parseInt(document.getElementById('receiptApartment').value);
+  const year = parseInt(document.getElementById('receiptYear').value);
+  const month = parseInt(document.getElementById('receiptMonth').value);
+  
+  if (!aptId) {
+    alert('Выберите квартиру');
+    return;
+  }
+  
+  const apt = DATA.apartments.find(a => a.id === aptId);
+  const period = `${year}-${String(month).padStart(2, '0')}`;
+  const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+                      'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  
+  document.getElementById('receiptPanel').style.display = 'block';
+  document.getElementById('receiptAptName').textContent = apt.name;
+  document.getElementById('receiptPeriodDisplay').textContent = `${monthNames[month-1]} ${year}`;
+  
+  let html = '<table><thead><tr>';
+  html += '<th>Услуга</th>';
+  html += '<th>Предыдущее</th>';
+  html += '<th>Текущее</th>';
+  html += '<th>Расход</th>';
+  html += '<th>Тариф</th>';
+  html += '<th>Начисление</th>';
+  html += '</tr></thead><tbody>';
+  
+  let grandTotal = 0;
+  
+  DATA.services.forEach(srv => {
+    const tariff = getTariff(srv.id, apt.type);
+    
+    if (srv.calc_type === 'meter') {
+      const prev = getReading(aptId, srv.id, getPrevPeriod(period)) || 0;
+      const curr = getReading(aptId, srv.id, period) || 0;
+      const volume = curr - prev;
+      const amount = volume * tariff;
+      grandTotal += amount;
+      
+      html += `<tr>
+        <td><strong>${srv.name}</strong></td>
+        <td>${prev.toFixed(2)}</td>
+        <td>${curr.toFixed(2)}</td>
+        <td>${volume.toFixed(2)} ${srv.unit}</td>
+        <td>${tariff} ₽</td>
+        <td class="amount">${amount.toFixed(2)} ₽</td>
+      </tr>`;
+      
+    } else if (srv.calc_type === 'calculated') {
+      let volume = 0;
+      let amount = 0;
+      
+      if (srv.id === 2) {
+        const elecPrev = getReading(aptId, 1, getPrevPeriod(period)) || 0;
+        const elecCurr = getReading(aptId, 1, period) || 0;
+        volume = (elecCurr - elecPrev) * 0.1;
+        amount = volume * tariff;
+      } else if (srv.id === 5) {
+        const hvPrev = getReading(aptId, 3, getPrevPeriod(period)) || 0;
+        const hvCurr = getReading(aptId, 3, period) || 0;
+        const gvPrev = getReading(aptId, 4, getPrevPeriod(period)) || 0;
+        const gvCurr = getReading(aptId, 4, period) || 0;
+        volume = (hvCurr - hvPrev) + (gvCurr - gvPrev);
+        amount = volume * tariff;
+      }
+      
+      grandTotal += amount;
+      
+      html += `<tr>
+        <td><strong>${srv.name}</strong></td>
+        <td colspan="2" style="text-align:center;">Автоматически</td>
+        <td>${volume.toFixed(2)} ${srv.unit}</td>
+        <td>${tariff} ₽</td>
+        <td class="amount">${amount.toFixed(2)} ₽</td>
+      </tr>`;
+      
+    } else if (srv.calc_type === 'checkbox') {
+      const enabled = getHeating(aptId, period);
+      const amount = enabled ? tariff : 0;
+      grandTotal += amount;
+      
+      html += `<tr>
+        <td><strong>${srv.name}</strong></td>
+        <td colspan="3" style="text-align:center;">${enabled ? 'Включено' : 'Выключено'}</td>
+        <td>${tariff} ₽</td>
+        <td class="amount">${amount.toFixed(2)} ₽</td>
+      </tr>`;
+      
+    } else if (srv.calc_type === 'fixed') {
+      grandTotal += tariff;
+      
+      html += `<tr>
+        <td><strong>${srv.name}</strong></td>
+        <td colspan="3" style="text-align:center;">Фиксированная</td>
+        <td>${tariff} ₽</td>
+        <td class="amount">${tariff.toFixed(2)} ₽</td>
+      </tr>`;
+    }
+  });
+  
+  // Доп начисления
+  const charge = getCharge(aptId, period);
+  if (charge) {
+    grandTotal += charge.amount;
+    html += `<tr class="charge-row">
+      <td><strong>Доп. начисления</strong></td>
+      <td colspan="4">${charge.comment}</td>
+      <td class="amount">${charge.amount.toFixed(2)} ₽</td>
+    </tr>`;
+  }
+  
+  // Итого
+  html += `<tr class="total-row">
+    <td colspan="5"><strong>ИТОГО К ОПЛАТЕ:</strong></td>
+    <td><strong>${grandTotal.toFixed(2)} ₽</strong></td>
+  </tr>`;
+  
+  html += '</tbody></table>';
+  document.getElementById('receiptTable').innerHTML = html;
+  document.getElementById('exportReceiptBtn').disabled = false;
+}
+
+function exportReceiptToWord() {
+  alert('Экспорт квитанции в Word будет реализован в следующей версии.\nПока можете использовать Ctrl+P для печати.');
 }
 
 // ========== Тарифы ==========
@@ -809,6 +1137,9 @@ window.saveData = saveData;
 window.saveSettings = saveSettings;
 window.clearSettings = clearSettings;
 window.updateTariff = updateTariff;
-window.toggleHistoryMode = toggleHistoryMode;
 window.showHistoryFull = showHistoryFull;
 window.exportToExcel = exportToExcel;
+window.showCorrectionForm = showCorrectionForm;
+window.saveCorrectionData = saveCorrectionData;
+window.generateReceipt = generateReceipt;
+window.exportReceiptToWord = exportReceiptToWord;
