@@ -17,6 +17,8 @@
     <div class="container">
       <button class="tab-btn active" data-tab="calc">Начисления и расчёт</button>
       <button class="tab-btn" data-tab="history">История потребления</button>
+      <button class="tab-btn" data-tab="correction">Корректировка данных</button>
+      <button class="tab-btn" data-tab="receipt">Квитанция на оплату</button>
       <button class="tab-btn" data-tab="tariffs">Тарифы</button>
       <button class="tab-btn" data-tab="settings">Настройки</button>
     </div>
@@ -70,15 +72,9 @@
           </div>
         </div>
 
-        <!-- История показаний/объемов -->
+        <!-- История показаний -->
         <div class="card">
-          <div class="form-row">
-            <h3 style="margin: 0;">История за последние 3 месяца</h3>
-            <div class="btn-group" style="margin-left: auto;">
-              <button class="btn btn-secondary" onclick="toggleHistoryMode('readings')">Показания</button>
-              <button class="btn btn-secondary" onclick="toggleHistoryMode('volumes')">Объёмы</button>
-            </div>
-          </div>
+          <h3>История показаний за последние 3 месяца</h3>
           <div class="table-container">
             <div id="historyTable"></div>
           </div>
@@ -112,6 +108,14 @@
               <option value="2030">2030</option>
             </select>
           </div>
+          <div class="form-group">
+            <label>Режим просмотра</label>
+            <select id="historyViewMode" class="select-large">
+              <option value="amounts">Начисления (₽)</option>
+              <option value="volumes">Объёмы</option>
+              <option value="readings">Показания</option>
+            </select>
+          </div>
           <div class="btn-group" style="margin-left: auto; align-self: flex-end;">
             <button onclick="showHistoryFull()" class="btn btn-primary">Показать</button>
             <button onclick="exportToExcel()" class="btn btn-success">Выгрузить в Excel</button>
@@ -124,6 +128,120 @@
           <h3>Потребление за <span id="historyPeriodTitle"></span></h3>
           <div class="table-container" style="overflow-x: auto;">
             <div id="consumptionTable"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Корректировка данных -->
+    <section id="correction" class="tab-content">
+      <div class="card">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Квартира</label>
+            <select id="correctionApartment" class="select-large">
+              <option value="">Выберите квартиру...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Год</label>
+            <select id="correctionYear" class="select-large">
+              <option value="2020">2020</option>
+              <option value="2021">2021</option>
+              <option value="2022">2022</option>
+              <option value="2023">2023</option>
+              <option value="2024">2024</option>
+              <option value="2025" selected>2025</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+              <option value="2028">2028</option>
+              <option value="2029">2029</option>
+              <option value="2030">2030</option>
+            </select>
+          </div>
+          <button onclick="showCorrectionForm()" class="btn btn-primary" style="align-self: flex-end;">Загрузить данные</button>
+        </div>
+      </div>
+
+      <div id="correctionPanel" style="display:none;">
+        <div class="card">
+          <h3>Корректировка показаний за <span id="correctionPeriodTitle"></span></h3>
+          <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
+            Вы можете вручную проставить показания за любые месяцы года
+          </p>
+          <div class="table-container" style="overflow-x: auto;">
+            <div id="correctionTable"></div>
+          </div>
+          <button onclick="saveCorrectionData()" class="btn btn-success" style="margin-top: 12px;">
+            Сохранить все изменения
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Квитанция на оплату -->
+    <section id="receipt" class="tab-content">
+      <div class="card">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Квартира</label>
+            <select id="receiptApartment" class="select-large">
+              <option value="">Выберите квартиру...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Год</label>
+            <input type="number" id="receiptYear" class="select-large" value="2025" min="2020" max="2030">
+          </div>
+          <div class="form-group">
+            <label>Месяц</label>
+            <select id="receiptMonth" class="select-large">
+              <option value="1">Январь</option>
+              <option value="2">Февраль</option>
+              <option value="3">Март</option>
+              <option value="4">Апрель</option>
+              <option value="5">Май</option>
+              <option value="6">Июнь</option>
+              <option value="7">Июль</option>
+              <option value="8">Август</option>
+              <option value="9">Сентябрь</option>
+              <option value="10">Октябрь</option>
+              <option value="11">Ноябрь</option>
+              <option value="12">Декабрь</option>
+            </select>
+          </div>
+          <div class="btn-group" style="margin-left: auto; align-self: flex-end;">
+            <button onclick="generateReceipt()" class="btn btn-primary">Сформировать</button>
+            <button onclick="exportReceiptToWord()" class="btn btn-success" id="exportReceiptBtn" disabled>
+              Выгрузить в Word
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="receiptPanel" style="display:none;">
+        <div class="card" id="receiptContent">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h2 style="margin-bottom: 8px;">Квартира <span id="receiptAptName"></span></h2>
+            <h3 style="color: var(--text-secondary);">Квитанция на оплату</h3>
+            <p style="color: var(--text-muted);">Период: <span id="receiptPeriodDisplay"></span></p>
+          </div>
+
+          <div class="table-container">
+            <div id="receiptTable"></div>
+          </div>
+
+          <div style="margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+            <div>
+              <p style="margin-bottom: 20px;"><strong>Арендодатель:</strong></p>
+              <p>_________________________________</p>
+              <p style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">(подпись)</p>
+            </div>
+            <div>
+              <p style="margin-bottom: 20px;"><strong>Арендатор:</strong></p>
+              <p>_________________________________</p>
+              <p style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">(подпись)</p>
+            </div>
           </div>
         </div>
       </div>
