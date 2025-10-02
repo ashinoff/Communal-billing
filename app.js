@@ -21,6 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('receiptYear').value = now.getFullYear();
   document.getElementById('receiptMonth').value = now.getMonth() + 1;
   
+  // Установить текущую дату для калькуляции по дням
+  const today = now.toISOString().split('T')[0];
+  document.getElementById('dailyDateFrom').value = today;
+  document.getElementById('dailyDateTo').value = today;
+  
   if (DATA.settings.token) {
     loadAllData();
   }
@@ -215,6 +220,7 @@ async function loadAllData() {
     DATA.charges = await readCSV('charges.csv');
     DATA.heating = await readCSV('heating.csv');
     DATA.overrides = await readCSV('overrides.csv');
+    DATA.storno = await readCSV('storno.csv');
     
     if (DATA.apartments.length === 0) {
       showStatus('Файл apartments.csv пустой', 'error');
@@ -231,7 +237,7 @@ async function loadAllData() {
 }
 
 function populateDropdowns() {
-  ['apartment', 'historyApartment', 'correctionApartment', 'receiptApartment'].forEach(id => {
+  ['apartment', 'historyApartment', 'correctionApartment', 'receiptApartment', 'dailyApartment'].forEach(id => {
     const sel = document.getElementById(id);
     sel.innerHTML = '<option value="">Выберите квартиру...</option>';
     DATA.apartments.forEach(apt => {
@@ -555,9 +561,19 @@ function renderTotals(aptId, aptType) {
   });
   html += '</tr>';
   
+  // Сторно (вычитание)
+  html += `<tr style="background: rgba(220, 38, 38, 0.05);"><td><strong>Сторно (вычет)</strong></td>`;
+  periods.forEach((period, idx) => {
+    const storno = getStorno(aptId, period);
+    const amt = storno?.amount || 0;
+    totals[idx] -= amt;
+    html += `<td style="color: var(--danger);">${amt > 0 ? '-' + amt.toFixed(2) : '—'} ₽</td>`;
+  });
+  html += '</tr>';
+  
   // Итого
   html += `<tr class="total-row"><td><strong>ИТОГО:</strong></td>`;
-  totals.forEach(t => html += `<td><strong>${t.toFixed(2)} ₽</strong></td>`);
+  totals.forEach(t => html += `<td><strong style="color: var(--success); font-size: 14px;">${t.toFixed(2)} ₽</strong></td>`);
   html += '</tr></tbody></table>';
   
   document.getElementById('totalsTable').innerHTML = html;
@@ -683,14 +699,26 @@ function showHistoryFull() {
     });
     html += `<td><strong>${chargeTotal.toFixed(2)} ₽</strong></td></tr>`;
     
+    // Сторно
+    html += `<tr style="background: rgba(220, 38, 38, 0.05);"><td><strong>Сторно (вычет)</strong></td>`;
+    let stornoTotal = 0;
+    periods.forEach((period, idx) => {
+      const storno = getStorno(aptId, period);
+      const amt = storno?.amount || 0;
+      chartData[idx] -= amt;
+      stornoTotal += amt;
+      html += `<td style="color: var(--danger);">${amt > 0 ? '-' + amt.toFixed(2) : '—'}</td>`;
+    });
+    html += `<td><strong style="color: var(--danger);">-${stornoTotal.toFixed(2)} ₽</strong></td></tr>`;
+    
     // Итого
     html += `<tr class="total-row"><td><strong>ИТОГО:</strong></td>`;
     let grandTotal = 0;
     chartData.forEach(t => {
       grandTotal += t;
-      html += `<td><strong>${t.toFixed(2)} ₽</strong></td>`;
+      html += `<td><strong style="color: var(--success); font-size: 14px;">${t.toFixed(2)} ₽</strong></td>`;
     });
-    html += `<td><strong>${grandTotal.toFixed(2)} ₽</strong></td></tr>`;
+    html += `<td><strong style="color: var(--success); font-size: 14px;">${grandTotal.toFixed(2)} ₽</strong></td></tr>`;
   }
   
   html += '</tbody></table>';
@@ -803,6 +831,18 @@ function showCorrectionForm() {
       <input type="text" value="${charge?.comment || ''}"
         data-apt="${aptId}" data-period="${period}"
         class="comment-correction-input" placeholder="—" style="width:70px; font-size:11px;">
+    </td>`;
+  });
+  html += '</tr>';
+  
+  // 6. Сторно (вычет)
+  html += `<tr style="background: rgba(220, 38, 38, 0.05);"><td><strong>Сторно (вычет, ₽)</strong></td>`;
+  periods.forEach(period => {
+    const storno = getStorno(aptId, period);
+    html += `<td>
+      <input type="number" step="0.01" value="${storno?.amount || ''}"
+        data-apt="${aptId}" data-period="${period}"
+        class="storno-correction-input" placeholder="—" style="width:70px;">
     </td>`;
   });
   html += '</tr>';
@@ -942,6 +982,38 @@ async function saveCorrectionData() {
     await writeCSV('overrides.csv', DATA.overrides);
     await writeCSV('charges.csv', DATA.charges);
     
+    // 5. Сохранить сторно
+    const stornoInputs = document.querySelectorAll('.storno-correction-input');
+    stornoInputs.forEach(input => {
+      const aptId = parseInt(input.dataset.apt);
+      const period = input.dataset.period;
+      const amount = parseFloat(input.value);
+      
+      if (!isNaN(amount) && amount > 0) {
+        let storno = DATA.storno.find(s => 
+          s.apartment_id === aptId && s.period === period
+        );
+        
+        if (storno) {
+          storno.amount = amount;
+        } else {
+          DATA.storno.push({
+            id: Math.max(0, ...DATA.storno.map(s => s.id)) + 1,
+            apartment_id: aptId,
+            period,
+            amount
+          });
+        }
+      } else if (!amount || amount <= 0) {
+        // Удалить если очистили
+        DATA.storno = DATA.storno.filter(s => 
+          !(s.apartment_id === aptId && s.period === period)
+        );
+      }
+    });
+    
+    await writeCSV('storno.csv', DATA.storno);
+    
     showStatus('Все данные сохранены в CSV файлы', 'success');
     
   } catch (error) {
@@ -1066,10 +1138,21 @@ function generateReceipt() {
     </tr>`;
   }
   
+  // Сторно
+  const storno = getStorno(aptId, period);
+  if (storno) {
+    grandTotal -= storno.amount;
+    html += `<tr style="background: rgba(220, 38, 38, 0.05);">
+      <td><strong>Сторно (вычет)</strong></td>
+      <td colspan="4">Корректировка расчета</td>
+      <td style="color: var(--danger); font-weight: 600;">-${storno.amount.toFixed(2)} ₽</td>
+    </tr>`;
+  }
+  
   // Итого
   html += `<tr class="total-row">
     <td colspan="5"><strong>ИТОГО К ОПЛАТЕ:</strong></td>
-    <td><strong>${grandTotal.toFixed(2)} ₽</strong></td>
+    <td><strong style="color: var(--success); font-size: 16px;">${grandTotal.toFixed(2)} ₽</strong></td>
   </tr>`;
   
   html += '</tbody></table>';
@@ -1079,6 +1162,237 @@ function generateReceipt() {
 
 function exportReceiptToWord() {
   alert('Экспорт квитанции в Word будет реализован в следующей версии.\nПока можете использовать Ctrl+P для печати.');
+}
+
+// ========== Калькуляция по дням ==========
+let dailyCalcData = null;
+
+function loadDailyCalc() {
+  const aptId = parseInt(document.getElementById('dailyApartment').value);
+  const dateFrom = document.getElementById('dailyDateFrom').value;
+  const dateTo = document.getElementById('dailyDateTo').value;
+  
+  if (!aptId || !dateFrom || !dateTo) {
+    alert('Заполните все поля');
+    return;
+  }
+  
+  const from = new Date(dateFrom);
+  const to = new Date(dateTo);
+  
+  if (from >= to) {
+    alert('Дата "ПО" должна быть больше даты "С"');
+    return;
+  }
+  
+  const days = Math.ceil((to - from) / (1000 * 60 * 60 * 24)) + 1;
+  const monthDays = new Date(from.getFullYear(), from.getMonth() + 1, 0).getDate();
+  
+  const apt = DATA.apartments.find(a => a.id === aptId);
+  const period = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}`;
+  
+  dailyCalcData = {
+    aptId,
+    apt,
+    dateFrom,
+    dateTo,
+    days,
+    monthDays,
+    period,
+    calculated: false
+  };
+  
+  document.getElementById('dailyPanel').style.display = 'block';
+  document.getElementById('dailyPeriodDisplay').textContent = `${dateFrom} — ${dateTo}`;
+  document.getElementById('dailyDaysCount').textContent = days;
+  
+  renderDailyTable();
+}
+
+function renderDailyTable() {
+  const { aptId, apt, period, days, monthDays } = dailyCalcData;
+  
+  let html = '<table><thead><tr>';
+  html += '<th>Услуга</th>';
+  html += '<th>Предыдущее</th>';
+  html += '<th>Текущее</th>';
+  html += '<th>Расход</th>';
+  html += '<th>Тариф</th>';
+  html += '<th>Начисление</th>';
+  html += '</tr></thead><tbody>';
+  
+  DATA.services.forEach(srv => {
+    const tariff = getTariff(srv.id, apt.type);
+    
+    if (srv.calc_type === 'meter') {
+      const prev = getReading(aptId, srv.id, getPrevPeriod(period)) || 0;
+      const curr = getReading(aptId, srv.id, period);
+      
+      html += `<tr>
+        <td><strong>${srv.name}</strong></td>
+        <td>${prev.toFixed(2)}</td>
+        <td><input type="number" step="0.01" value="${curr !== null ? curr : ''}" 
+            data-service="${srv.id}" class="daily-reading-input" placeholder="0" style="width:100px;"></td>
+        <td data-volume="${srv.id}">—</td>
+        <td>${tariff} ₽</td>
+        <td class="amount" data-result="${srv.id}">—</td>
+      </tr>`;
+      
+    } else if (srv.calc_type === 'calculated') {
+      html += `<tr>
+        <td><strong>${srv.name}</strong></td>
+        <td colspan="2" style="text-align:center;">Автоматически</td>
+        <td data-volume="${srv.id}">—</td>
+        <td>${tariff} ₽</td>
+        <td class="amount" data-result="${srv.id}">—</td>
+      </tr>`;
+      
+    } else if (srv.calc_type === 'checkbox') {
+      const enabled = getHeating(aptId, period);
+      const dailyAmount = (tariff / monthDays * days);
+      
+      html += `<tr>
+        <td><strong>${srv.name}</strong></td>
+        <td colspan="2" style="text-align:center;">
+          <input type="checkbox" ${enabled ? 'checked' : ''} 
+            data-service="${srv.id}" class="daily-heating-checkbox">
+          ${days} из ${monthDays} дней
+        </td>
+        <td>—</td>
+        <td>${tariff} ₽/мес</td>
+        <td class="amount" data-result="${srv.id}">—</td>
+      </tr>`;
+      
+    } else if (srv.calc_type === 'fixed') {
+      const override = getOverride(aptId, srv.id, period);
+      const baseTariff = override !== null ? override : tariff;
+      const dailyAmount = (baseTariff / monthDays * days);
+      
+      html += `<tr>
+        <td><strong>${srv.name}</strong></td>
+        <td colspan="2" style="text-align:center;">${days} из ${monthDays} дней</td>
+        <td>—</td>
+        <td>${baseTariff.toFixed(2)} ₽/мес</td>
+        <td class="amount" data-result="${srv.id}">${dailyAmount.toFixed(2)} ₽</td>
+      </tr>`;
+    }
+  });
+  
+  // Итого
+  html += `<tr class="total-row">
+    <td colspan="5"><strong>ИТОГО К ОПЛАТЕ:</strong></td>
+    <td id="dailyTotal"><strong>—</strong></td>
+  </tr>`;
+  
+  html += '</tbody></table>';
+  document.getElementById('dailyTable').innerHTML = html;
+}
+
+function calculateDaily() {
+  const { aptId, apt, period, days, monthDays } = dailyCalcData;
+  
+  let grandTotal = 0;
+  
+  DATA.services.forEach(srv => {
+    const tariff = getTariff(srv.id, apt.type);
+    let amount = 0;
+    
+    if (srv.calc_type === 'meter') {
+      const input = document.querySelector(`.daily-reading-input[data-service="${srv.id}"]`);
+      const curr = parseFloat(input.value) || 0;
+      const prev = getReading(aptId, srv.id, getPrevPeriod(period)) || 0;
+      const volume = curr - prev;
+      amount = volume * tariff;
+      
+      document.querySelector(`td[data-volume="${srv.id}"]`).textContent = volume.toFixed(2);
+      
+    } else if (srv.calc_type === 'calculated') {
+      if (srv.id === 2) {
+        const elecInput = document.querySelector('.daily-reading-input[data-service="1"]');
+        const elecCurr = parseFloat(elecInput.value) || 0;
+        const elecPrev = getReading(aptId, 1, getPrevPeriod(period)) || 0;
+        const volume = (elecCurr - elecPrev) * 0.1;
+        amount = volume * tariff;
+        document.querySelector(`td[data-volume="${srv.id}"]`).textContent = volume.toFixed(2);
+      } else if (srv.id === 5) {
+        const hvInput = document.querySelector('.daily-reading-input[data-service="3"]');
+        const gvInput = document.querySelector('.daily-reading-input[data-service="4"]');
+        const hvCurr = parseFloat(hvInput.value) || 0;
+        const gvCurr = parseFloat(gvInput.value) || 0;
+        const hvPrev = getReading(aptId, 3, getPrevPeriod(period)) || 0;
+        const gvPrev = getReading(aptId, 4, getPrevPeriod(period)) || 0;
+        const volume = (hvCurr - hvPrev) + (gvCurr - gvPrev);
+        amount = volume * tariff;
+        document.querySelector(`td[data-volume="${srv.id}"]`).textContent = volume.toFixed(2);
+      }
+      
+    } else if (srv.calc_type === 'checkbox') {
+      const cb = document.querySelector('.daily-heating-checkbox');
+      const baseTariff = cb.checked ? tariff : 0;
+      amount = baseTariff / monthDays * days;
+      
+    } else if (srv.calc_type === 'fixed') {
+      const override = getOverride(aptId, srv.id, period);
+      const baseTariff = override !== null ? override : tariff;
+      amount = baseTariff / monthDays * days;
+    }
+    
+    const cell = document.querySelector(`td[data-result="${srv.id}"]`);
+    if (cell) cell.textContent = amount.toFixed(2) + ' ₽';
+    grandTotal += amount;
+  });
+  
+  document.getElementById('dailyTotal').innerHTML = 
+    `<strong style="color: var(--success); font-size: 16px;">${grandTotal.toFixed(2)} ₽</strong>`;
+  
+  dailyCalcData.calculated = true;
+  dailyCalcData.total = grandTotal;
+  document.getElementById('exportDailyBtn').disabled = false;
+  document.getElementById('fixStornoBtn').disabled = false;
+}
+
+async function fixStorno() {
+  if (!dailyCalcData.calculated) {
+    alert('Сначала нажмите "Рассчитать"');
+    return;
+  }
+  
+  const { aptId, period, total } = dailyCalcData;
+  
+  if (!confirm(`Зафиксировать сторно ${total.toFixed(2)} ₽ для периода ${period}?`)) {
+    return;
+  }
+  
+  showLoader(true);
+  
+  try {
+    let storno = DATA.storno.find(s => 
+      s.apartment_id === aptId && s.period === period
+    );
+    
+    if (storno) {
+      storno.amount = total;
+    } else {
+      DATA.storno.push({
+        id: Math.max(0, ...DATA.storno.map(s => s.id)) + 1,
+        apartment_id: aptId,
+        period,
+        amount: total
+      });
+    }
+    
+    await writeCSV('storno.csv', DATA.storno);
+    showStatus('Сторно зафиксировано', 'success');
+    
+  } catch (error) {
+    showStatus(`Ошибка: ${error.message}`, 'error');
+  } finally {
+    showLoader(false);
+  }
+}
+
+function exportDailyToWord() {
+  alert('Экспорт расчёта в Word будет реализован в следующей версии.\nПока можете использовать Ctrl+P для печати.');
 }
 
 // ========== Тарифы ==========
@@ -1171,6 +1485,12 @@ function getCharge(aptId, period) {
   );
 }
 
+function getStorno(aptId, period) {
+  return DATA.storno.find(s => 
+    s.apartment_id === aptId && s.period === period
+  );
+}
+
 function getOverride(aptId, srvId, period) {
   const override = DATA.overrides.find(o => 
     o.apartment_id === aptId && 
@@ -1199,3 +1519,7 @@ window.showCorrectionForm = showCorrectionForm;
 window.saveCorrectionData = saveCorrectionData;
 window.generateReceipt = generateReceipt;
 window.exportReceiptToWord = exportReceiptToWord;
+window.loadDailyCalc = loadDailyCalc;
+window.calculateDaily = calculateDaily;
+window.fixStorno = fixStorno;
+window.exportDailyToWord = exportDailyToWord;
