@@ -1,25 +1,24 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Коммунальные платежи</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header>
     <div class="container">
-      <h1>Коммунальные платежи</h1>
-      <p class="subtitle">Учёт и расчёт коммунальных услуг</p>
+      <h1>💰 Коммунальные платежи</h1>
     </div>
   </header>
 
   <nav>
     <div class="container">
-      <button class="tab-btn active" data-tab="calc">📊 Расчёт</button>
-      <button class="tab-btn" data-tab="history">📈 История</button>
-      <button class="tab-btn" data-tab="tariffs">💵 Тарифы</button>
-      <button class="tab-btn" data-tab="settings">⚙️ Настройки</button>
+      <button class="tab-btn active" data-tab="calc">Начисления и расчёт</button>
+      <button class="tab-btn" data-tab="history">История потребления</button>
+      <button class="tab-btn" data-tab="tariffs">Тарифы</button>
+      <button class="tab-btn" data-tab="settings">Настройки GitHub</button>
     </div>
   </nav>
 
@@ -27,107 +26,93 @@
     <!-- Начисления и расчёт -->
     <section id="calc" class="tab-content active">
       <div class="card">
-        <h2>Начисления и расчёт</h2>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Квартира</label>
-            <select id="calcApartment">
-              <option value="">Выберите квартиру...</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Год</label>
-            <input id="calcYear" type="number" min="2000" max="2100" />
-          </div>
-          <div class="form-group">
-            <label>Месяц</label>
-            <input id="calcMonth" type="number" min="1" max="12" />
-          </div>
-          <div class="form-group">
-            <label>Режим просмотра</label>
-            <select id="viewMode">
-              <option value="readings">Показания</option>
-              <option value="volumes">Объёмы</option>
-            </select>
-          </div>
+        <h2>Выберите квартиру</h2>
+        <select id="apartment" class="select-large">
+          <option value="">Загрузите данные...</option>
+        </select>
+      </div>
+
+      <div id="calcPanel" style="display:none;">
+        <!-- Ввод показаний за текущий месяц -->
+        <div class="card highlight-card">
+          <h3>⚡ Введите показания за <span id="currentPeriod"></span></h3>
+          <p class="hint">Заполните текущие показания счётчиков и отметьте услуги</p>
+          
+          <div id="inputForm"></div>
+          
+          <button onclick="saveData()" class="btn btn-primary btn-large">
+            💾 Сохранить показания
+          </button>
         </div>
-        <button id="calcReload" class="btn btn-primary">Показать данные</button>
-      </div>
 
-      <div id="calcInputs" class="card" style="display:none;">
-        <h3>Показания счётчиков</h3>
-        <div id="calcInputsContent"></div>
-      </div>
+        <!-- Переключатель для истории -->
+        <div class="card">
+          <h3>История за последние 3 месяца</h3>
+          <label class="switch-label">
+            <input type="radio" name="viewMode" value="readings" checked> Показания счётчиков
+            <input type="radio" name="viewMode" value="volumes"> Объёмы потребления
+          </label>
+          <div id="historyTable"></div>
+        </div>
 
-      <div id="calcTotals" class="card" style="display:none;">
-        <h3>Итого за месяц</h3>
-        <div id="calcTotalsContent"></div>
+        <!-- Итоги по месяцам -->
+        <div class="card">
+          <h3>💰 Итоги начислений по месяцам</h3>
+          <div id="totalsTable"></div>
+        </div>
       </div>
     </section>
 
-    <!-- История -->
+    <!-- История потребления -->
     <section id="history" class="tab-content">
       <div class="card">
-        <h2>История по квартире</h2>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Квартира</label>
-            <select id="histApartment">
-              <option value="">Выберите квартиру...</option>
-            </select>
-          </div>
-        </div>
-        <button id="histReload" class="btn btn-primary">Показать историю</button>
+        <h2>История потребления</h2>
+        <select id="historyApartment" class="select-large">
+          <option value="">Выберите квартиру...</option>
+        </select>
       </div>
-      
-      <div id="histTable" class="card" style="display:none;">
-        <h3>Таблица платежей</h3>
-        <div class="table-responsive">
-          <div id="histTableContent"></div>
+
+      <div id="historyPanel" style="display:none;">
+        <div class="card">
+          <h3>Таблица потребления</h3>
+          <div id="consumptionTable"></div>
         </div>
-      </div>
-      
-      <div id="histChartCard" class="card" style="display:none;">
-        <h3>График расходов</h3>
-        <canvas id="histChart"></canvas>
+
+        <div class="card">
+          <h3>График расходов</h3>
+          <canvas id="chart"></canvas>
+        </div>
       </div>
     </section>
 
     <!-- Тарифы -->
     <section id="tariffs" class="tab-content">
       <div class="card">
-        <h2>Управление тарифами</h2>
+        <h2>Действующие тарифы</h2>
+        <div id="tariffsTable"></div>
+      </div>
+
+      <div class="card">
+        <h3>Изменить тариф</h3>
         <div class="form-grid">
-          <div class="form-group">
+          <div>
             <label>Услуга</label>
-            <select id="tarService">
-              <option value="">Выберите услугу...</option>
+            <select id="tariffService"></select>
+          </div>
+          <div>
+            <label>Новая цена (₽)</label>
+            <input type="number" id="tariffPrice" step="0.01">
+          </div>
+          <div>
+            <label>Тип квартиры (для отопления)</label>
+            <select id="tariffAptType">
+              <option value="all">Все</option>
+              <option value="studio">Студии</option>
+              <option value="duplex">Двухуровневые</option>
             </select>
           </div>
-          <div class="form-group">
-            <label>Цена за единицу</label>
-            <input id="tarPrice" type="number" step="0.01" placeholder="0.00"/>
-          </div>
-          <div class="form-group">
-            <label>Дата начала</label>
-            <input id="tarStart" type="date"/>
-          </div>
-          <div class="form-group">
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input id="tarHasEnd" type="checkbox"/>
-              Дата окончания
-            </label>
-            <input id="tarEnd" type="date" disabled/>
-          </div>
         </div>
-        <button id="addTariff" class="btn btn-primary">Добавить тариф</button>
-      </div>
-      
-      <div id="tarTable" class="card">
-        <h3>Текущие тарифы</h3>
-        <div class="table-responsive">
-          <div id="tarTableContent"></div>
-        </div>
+        <button onclick="updateTariff()" class="btn btn-primary">Обновить тариф</button>
       </div>
     </section>
 
@@ -135,73 +120,44 @@
     <section id="settings" class="tab-content">
       <div class="card">
         <h2>Настройки GitHub</h2>
-        <p class="info-text">
-          Данные хранятся в CSV-файлах в вашем GitHub репозитории. 
-          Для работы требуется Personal Access Token с правами <code>repo</code>.
-        </p>
-        
         <div class="form-grid">
-          <div class="form-group">
-            <label>GitHub Owner</label>
-            <input id="owner" value="ashinoff" placeholder="username"/>
+          <div>
+            <label>Owner (ваш логин)</label>
+            <input type="text" id="owner" placeholder="ashinoff">
           </div>
-          <div class="form-group">
-            <label>Репозиторий</label>
-            <input id="repo" value="Communal-billing" placeholder="repo-name"/>
+          <div>
+            <label>Repository</label>
+            <input type="text" id="repo" placeholder="Communal-billing">
           </div>
-          <div class="form-group">
-            <label>Ветка</label>
-            <input id="branch" value="main" placeholder="main"/>
+          <div>
+            <label>Branch</label>
+            <input type="text" id="branch" value="main">
           </div>
-          <div class="form-group">
-            <label>Папка с данными</label>
-            <input id="datadir" value="data" placeholder="data"/>
+          <div>
+            <label>Data folder</label>
+            <input type="text" id="datadir" value="data">
           </div>
-          <div class="form-group full-width">
+          <div class="full-width">
             <label>Personal Access Token</label>
-            <input id="token" type="password" placeholder="ghp_..." />
+            <input type="password" id="token" placeholder="ghp_...">
             <small>Токен сохраняется только в вашем браузере</small>
           </div>
         </div>
-        
-        <div class="button-group">
-          <button id="saveSettings" class="btn btn-primary">Сохранить настройки</button>
-          <button id="testConnection" class="btn btn-secondary">Проверить соединение</button>
-        </div>
-        <div id="settingsStatus" class="status-message"></div>
+        <button onclick="saveSettings()" class="btn btn-primary">Сохранить и загрузить данные</button>
+        <div id="status"></div>
       </div>
 
       <div class="card">
-        <h3>Справка</h3>
-        <div class="help-section">
-          <h4>Как получить Personal Access Token?</h4>
-          <ol>
-            <li>Перейдите в Settings → Developer settings → Personal access tokens → Tokens (classic)</li>
-            <li>Нажмите "Generate new token (classic)"</li>
-            <li>Выберите scope <code>repo</code> для приватных репозиториев или <code>public_repo</code> для публичных</li>
-            <li>Скопируйте токен и вставьте в поле выше</li>
-          </ol>
-          
-          <h4>Структура данных</h4>
-          <p>В папке <code>data/</code> должны находиться следующие CSV файлы:</p>
-          <ul>
-            <li><code>apartments.csv</code> — квартиры</li>
-            <li><code>services.csv</code> — услуги</li>
-            <li><code>tariffs.csv</code> — тарифы</li>
-            <li><code>meters.csv</code> — счётчики</li>
-            <li><code>readings.csv</code> — показания</li>
-            <li><code>adjustments.csv</code> — корректировки</li>
-          </ul>
-        </div>
+        <h3>Инструкция по настройке</h3>
+        <ol>
+          <li>Создайте Personal Access Token в GitHub (Settings → Developer settings → Personal access tokens → Tokens classic)</li>
+          <li>Выберите scope: <code>repo</code> (для приватных) или <code>public_repo</code> (для публичных)</li>
+          <li>Создайте в репозитории папку <code>data</code> с CSV файлами</li>
+          <li>Заполните настройки выше и нажмите "Сохранить"</li>
+        </ol>
       </div>
     </section>
   </main>
-
-  <footer>
-    <div class="container">
-      <p>Коммунальные платежи • Данные хранятся в GitHub • 2025</p>
-    </div>
-  </footer>
 
   <div id="loader" class="loader" style="display:none;">
     <div class="spinner"></div>
