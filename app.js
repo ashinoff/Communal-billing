@@ -270,14 +270,14 @@ function renderInputTable(aptId, period, aptType) {
     const tariff = getTariff(srv.id, aptType);
     
     if (srv.calc_type === 'meter') {
-      const prev = getReading(aptId, srv.id, getPrevPeriod(period));
+      const prev = getReading(aptId, srv.id, getPrevPeriod(period)) || 0;
       const curr = getReading(aptId, srv.id, period);
       
       html += `<tr>
         <td><strong>${srv.name}</strong></td>
         <td><span class="badge badge-primary">${tariff} ₽</span></td>
-        <td><input type="text" value="${prev || 0}" disabled></td>
-        <td><input type="number" step="0.01" value="${curr || ''}" 
+        <td><input type="text" value="${prev}" disabled></td>
+        <td><input type="number" step="0.01" value="${curr !== null ? curr : ''}" 
             data-service="${srv.id}" class="reading-input" placeholder="0"></td>
         <td class="amount" data-result="${srv.id}">—</td>
       </tr>`;
@@ -623,15 +623,16 @@ function showHistoryFull() {
   
   const apt = DATA.apartments.find(a => a.id === aptId);
   const periods = [];
+  const monthNames = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
   
   for (let m = 1; m <= 12; m++) {
     periods.push(`${year}-${String(m).padStart(2, '0')}`);
   }
   
-  let html = '<table><thead><tr><th>Услуга</th>';
-  periods.forEach((p, i) => {
-    const monthNames = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
-    html += `<th>${monthNames[i]}</th>`;
+  // Таблица: услуги в строках, месяцы в столбцах
+  let html = '<table><thead><tr><th style="text-align:left;">Услуга</th>';
+  monthNames.forEach(month => {
+    html += `<th>${month}</th>`;
   });
   html += '<th>Итого</th></tr></thead><tbody>';
   
@@ -677,6 +678,18 @@ function showHistoryFull() {
     
     html += `<td><strong>${rowTotal.toFixed(2)} ₽</strong></td></tr>`;
   });
+  
+  // Доп начисления
+  html += `<tr class="charge-row"><td><strong>Доп. начисления</strong></td>`;
+  let chargeTotal = 0;
+  periods.forEach((period, idx) => {
+    const charge = getCharge(aptId, period);
+    const amt = charge?.amount || 0;
+    chartData[idx] += amt;
+    chargeTotal += amt;
+    html += `<td>${amt > 0 ? amt.toFixed(2) : '—'}</td>`;
+  });
+  html += `<td><strong>${chargeTotal.toFixed(2)} ₽</strong></td></tr>`;
   
   // Итого
   html += `<tr class="total-row"><td><strong>ИТОГО:</strong></td>`;
